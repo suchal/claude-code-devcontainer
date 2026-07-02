@@ -197,6 +197,57 @@ def fix_directory_ownership():
                 )
 
 
+def setup_gitlab_auth():
+    """Authenticate glab non-interactively from the GITLAB_TOKEN env var.
+
+    The git credential helper configured in setup_global_gitignore() calls
+    `glab auth git-credential`, which reads from glab's config file rather than
+    the environment. So glab must actually be logged in for git auth to work.
+    We feed the token (from devcontainer.json's containerEnv) via stdin, which
+    writes glab's config and enables both the glab CLI and git over HTTPS.
+    """
+    token = os.environ.get("GITLAB_TOKEN", "").strip()
+    host = os.environ.get("GITLAB_HOST", "gitlab.com").strip() or "gitlab.com"
+
+    if not token:
+        print(
+            "[post_install] No GITLAB_TOKEN set, skipping glab auth",
+            file=sys.stderr,
+        )
+        return
+
+    try:
+        subprocess.run(
+            [
+                "glab",
+                "auth",
+                "login",
+                "--hostname",
+                host,
+                "--git-protocol",
+                "https",
+                "--stdin",
+            ],
+            input=token,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+        print(f"[post_install] glab authenticated for {host}", file=sys.stderr)
+    except (FileNotFoundError, OSError) as e:
+        print(
+            f"[post_install] Warning: could not run glab ({e}) — "
+            "GitLab auth skipped",
+            file=sys.stderr,
+        )
+    except subprocess.CalledProcessError as e:
+        print(
+            f"[post_install] Warning: glab auth login failed "
+            f"({e.returncode}): {e.stderr.strip()}",
+            file=sys.stderr,
+        )
+
+
 def setup_global_gitignore():
     """Set up global gitignore and local git config.
 
@@ -211,6 +262,29 @@ def setup_global_gitignore():
     gitignore = home / ".gitignore_global"
     local_gitconfig = home / ".gitconfig.local"
     host_gitconfig = home / ".gitconfig"
+    cred_helper = home / ".gitlab-credential-helper.sh"
+
+    # GitLab host to authenticate against over HTTPS. A git credential helper
+    # (written below) emits the token from the GITLAB_TOKEN env var (set in
+    # devcontainer.json), so git clone/fetch/push authenticate without ever
+    # writing the token to disk.
+    gitlab_host = os.environ.get("GITLAB_HOST", "gitlab.com").strip() or "gitlab.com"
+
+    # Credential helper script: git calls it with "get" and we print the
+    # username/password it expects on stdout, reading the token from the env
+    # at call time. ("oauth2" is an accepted username for a GitLab PAT.)
+    helper_script = (
+        "#!/bin/sh\n"
+        "# Emits GitLab credentials from $GITLAB_TOKEN for git over HTTPS.\n"
+        "# Managed by .devcontainer/post_install.py — do not edit by hand.\n"
+        'if [ "$1" = get ]; then\n'
+        "  printf 'username=oauth2\\n'\n"
+        '  printf \'password=%s\\n\' "$GITLAB_TOKEN"\n'
+        "fi\n"
+    )
+    cred_helper.write_text(helper_script, encoding="utf-8")
+    cred_helper.chmod(0o755)
+    print(f"[post_install] GitLab credential helper created: {cred_helper}", file=sys.stderr)
 
     # Create global gitignore with common patterns
     patterns = """\
@@ -285,6 +359,10 @@ node_modules/
 
 [gpg "ssh"]
     program = /usr/bin/ssh-keygen
+
+[credential "https://{gitlab_host}"]
+    helper = ""
+    helper = {cred_helper}
 """
     local_gitconfig.write_text(local_config, encoding="utf-8")
     print(
@@ -301,6 +379,7 @@ def main():
     setup_tmux_config()
     fix_directory_ownership()
     setup_global_gitignore()
+    setup_gitlab_auth()
 
     print("[post_install] Configuration complete!", file=sys.stderr)
 

@@ -40,6 +40,14 @@ RUN ARCH=$(dpkg --print-architecture) && \
   dpkg -i /tmp/git-delta.deb && \
   rm /tmp/git-delta.deb
 
+# Install GitLab CLI (glab)
+# renovate: datasource=gitlab-releases depName=gitlab-org/cli
+ARG GLAB_VERSION=1.105.0
+RUN ARCH=$(dpkg --print-architecture) && \
+  curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${ARCH}.deb" -o /tmp/glab.deb && \
+  dpkg -i /tmp/glab.deb && \
+  rm /tmp/glab.deb
+
 # Install uv (Python package manager) via multi-stage copy
 COPY --from=uv /uv /usr/local/bin/uv
 
