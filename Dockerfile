@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   nano \
   unzip \
   vim \
+  # Database clients
+  default-mysql-client \
   # Network tools (for security testing)
   dnsutils \
   ipset \
@@ -47,6 +49,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
   curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${ARCH}.deb" -o /tmp/glab.deb && \
   dpkg -i /tmp/glab.deb && \
   rm /tmp/glab.deb
+
+# Install Azure CLI (arm64 + amd64 supported via Microsoft apt repo)
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install uv (Python package manager) via multi-stage copy
 COPY --from=uv /uv /usr/local/bin/uv
