@@ -24,7 +24,7 @@ Running Claude with `bypassPermissions` on your host machine is risky—it can e
 
   ```bash
   npm install -g @devcontainers/cli
-  git clone https://github.com/trailofbits/claude-code-devcontainer ~/.claude-devcontainer
+  git clone https://github.com/suchal/claude-code-devcontainer ~/.claude-devcontainer
   ~/.claude-devcontainer/install.sh self-install
   ```
 
